@@ -622,6 +622,192 @@ theorem div_set'₀ {B : Set (MvPolynomial σ R)}
   exists r
   rwa [← m.isRemainder_sdiff_singleton_zero_iff_isRemainder]
 
+/-- The `sPolynomial` of `f` and `g` -/
+noncomputable def sPolynomial (f g : MvPolynomial σ R) : MvPolynomial σ R :=
+  monomial (m.degree g - m.degree f) (m.leadingCoeff g) * f -
+  monomial (m.degree f - m.degree g) (m.leadingCoeff f) * g
+
+/-- The `sPolynomial` of `f` and `g` is antisymmetric -/
+theorem sPolynomial_antisymm (f g : MvPolynomial σ R) :
+   m.sPolynomial f g = - m.sPolynomial g f := by
+   unfold sPolynomial
+   exact
+     Eq.symm
+       (neg_sub ((monomial (m.degree f - m.degree g)) (m.leadingCoeff f) * g)
+         ((monomial (m.degree g - m.degree f)) (m.leadingCoeff g) * f))
+
+/-- the `sPolynomial` with `0` as first argument equals `0` -/
+@[simp]
+theorem sPolynomial_left_zero (g : MvPolynomial σ R) :
+  m.sPolynomial 0 g = 0 := by
+  unfold sPolynomial
+  simp only [zero_mul, sub_zero, leadingCoeff_zero, monomial_zero]
+  exact CommMonoidWithZero.mul_zero ((monomial (m.degree g - m.degree 0)) (m.leadingCoeff g))
+
+/-- the `sPolynomial` with `0` as second argument equals `0` -/
+@[simp]
+theorem sPolynomial_right_zero (f : MvPolynomial σ R) :
+  m.sPolynomial f 0 = 0 := by
+  rw [sPolynomial_antisymm, sPolynomial_left_zero, neg_zero]
+
+/-- A variant of `sPolynomial` -/
+theorem sPolynomial_def (f g : MvPolynomial σ R) :
+    m.sPolynomial f g =
+      monomial (m.degree f ⊔ m.degree g - m.degree f) (m.leadingCoeff g) * f -
+      monomial (m.degree f ⊔ m.degree g - m.degree g) (m.leadingCoeff f) * g := by
+  rw [sPolynomial]
+  congr 4
+  all_goals
+    rw [Finsupp.ext_iff]
+    simp_intro a
+    by_cases h : (m.degree f) a ≤ (m.degree g) a
+    ·simp [h]
+    ·simp [le_of_lt (not_le.mp h)]
+
+/-- The `sPolynomial` of `f` and `f` is `0` -/
+@[simp]
+theorem sPolynomial_self (f : MvPolynomial σ R) : m.sPolynomial f f = 0 := sub_self _
+
+/--
+The degree of the `sPolynomial` of `f` and `g` is less than the maximum of
+the degree of `f` and the degree of `g`
+-/
+theorem degree_sPolynomial_le (f g : MvPolynomial σ R) :
+    ((m.degree <| m.sPolynomial f g) ≼[m] m.degree f ⊔ m.degree g) := by
+    classical
+    by_cases hf_zero: f = 0
+    · simp [hf_zero]
+    by_cases hg_zero: g = 0
+    · simp [hg_zero]
+    simp [sPolynomial_def]
+    calc
+      _ ≤ _ ⊔ _ := by
+        exact degree_sub_le
+      _ ≤  m.toSyn (m.degree _ + m.degree _) ⊔ m.toSyn (m.degree _ + m.degree _) := by
+        exact sup_le_sup degree_mul_le degree_mul_le
+      _ ≤ (m.toSyn <| m.degree f ⊔ m.degree g - m.degree f + m.degree f) ⊔
+            (m.toSyn <| m.degree f ⊔ m.degree g - m.degree g + m.degree g) := by
+        simp_rw [degree_monomial]
+        simp [hg_zero, hf_zero]
+      _ ≤ m.toSyn (m.degree f ⊔ m.degree g) := by
+        simp
+        constructor
+        all_goals
+          apply le_of_eq
+          simp_rw [← AddEquiv.map_add, (AddEquiv.injective m.toSyn).eq_iff, Finsupp.ext_iff]
+          intro a
+          exact Nat.sub_add_cancel <| by simp
+
+/-- The coefficient of the `sPolynomial` of `f` and `g` at the max degree of `f` and `g` is `0` -/
+theorem coeff_sPolynomial_sup_eq_zero (f g : MvPolynomial σ R) :
+    (m.sPolynomial f g).coeff (m.degree f ⊔ m.degree g) = 0 := by
+  by_cases hf0 : f = 0
+  · simp [hf0]
+  by_cases hg0 : g = 0
+  · simp [hg0]
+  classical
+  rw [sPolynomial_def, coeff_sub]
+  have : m.degree f ⊔ m.degree g = m.degree f ⊔ m.degree g - m.degree f + m.degree f := by
+    rw [Finsupp.ext_iff]
+    intro _
+    exact (Nat.sub_add_cancel <| by simp).symm
+  nth_rewrite 1 [this, coeff_monomial_mul]
+  have : m.degree f ⊔ m.degree g = m.degree f ⊔ m.degree g - m.degree g + m.degree g := by
+    rw [Finsupp.ext_iff]
+    intro _
+    exact (Nat.sub_add_cancel <| by simp).symm
+  nth_rewrite 1 [this, coeff_monomial_mul]
+  unfold leadingCoeff
+  ring
+
+/--
+The degree of the `sPolynomial` of `f` and `g` is less than the maximum of the degree of `f` and
+the degree of `g` or the `sPolynomial` of `f` and `g` is `0`.
+-/
+theorem degree_sPolynomial (f g : MvPolynomial σ R) :
+    (m.degree <| m.sPolynomial f g) ≺[m] m.degree f ⊔ m.degree g ∨ m.sPolynomial f g = 0 := by
+    classical
+    by_cases hf : m.degree f = 0 ∧ m.degree g = 0
+    · rcases hf with ⟨h₁, h₂⟩
+      right
+      simp [sPolynomial_def, h₁, h₂]
+      have h1 : f = C (m.leadingCoeff f) := by
+        exact eq_C_of_degree_eq_zero h₁
+      have h2 : g = C (m.leadingCoeff g) := by
+        exact eq_C_of_degree_eq_zero h₂
+      nth_rewrite 1 [h1]
+      nth_rewrite 2 [h2]
+      ring
+    · by_cases hs: m.sPolynomial f g = 0
+      · simp [hs]
+      by_cases hf_zero: f = 0
+      · simp [hf_zero]
+      by_cases hg_zero: g = 0
+      · simp [hg_zero]
+      left
+      have h1: m.toSyn (m.degree (m.sPolynomial f g)) ≤  m.toSyn (m.degree f ⊔ m.degree g) := by
+        exact degree_sPolynomial_le f g
+      have h3: m.toSyn (m.degree (m.sPolynomial f g)) ≠ m.toSyn (m.degree f ⊔ m.degree g):= by
+        simp [degree_eq_zero_iff]
+        by_contra h
+        have: coeff (m.degree (m.sPolynomial f g)) (m.sPolynomial f g) ≠  0 := by
+          exact coeff_degree_ne_zero_iff.mpr hs
+        rw [h] at this
+        exact this (m.coeff_sPolynomial_sup_eq_zero _ _)
+      exact lt_of_le_of_ne h1 h3
+
+/--
+If the degree of the `sPolynomial` of `f` and `g` is less than
+the maximum of the degree of `f` and `g`
+-/
+lemma degree_sPolynomial_lt_sup_degree [NoZeroDivisors R]
+    {f g : MvPolynomial σ R} (h : m.sPolynomial f g ≠ 0) :
+    (m.degree <| m.sPolynomial f g) ≺[m] m.degree f ⊔ m.degree g :=
+  (or_iff_left h).mp <| m.degree_sPolynomial f g
+
+/--
+If the degree of `f` equals the degree of `g` and the `sPolynomial` of `f` and `g` is not zero,
+then the degree of the `sPolynomial` of `f` and `g` is less than the degree of `f`.
+-/
+lemma sPolynomial_lt_of_degree_ne_zero_of_degree_eq {f g: MvPolynomial σ R}
+    (h: m.degree f = m.degree g) (hs: m.sPolynomial f g ≠ 0) :
+    m.degree (m.sPolynomial f g) ≺[m] m.degree f := by
+  convert m.degree_sPolynomial f g
+  simp [h, hs]
+
+lemma sPolynomial_mul_monomial [IsCancelMulZero R] (p₁ p₂ : MvPolynomial σ R)
+    (d₁ d₂ : σ →₀ ℕ) (c₁ c₂ : R) : m.sPolynomial ((monomial d₁ c₁) * p₁) ((monomial d₂ c₂) * p₂) =
+      monomial ((d₁ + m.degree p₁) ⊔ (d₂ + m.degree p₂) - m.degree p₁ ⊔ m.degree p₂) (c₁ * c₂) *
+      m.sPolynomial p₁ p₂ := by
+  classical
+  simp only [sPolynomial_def]
+  by_cases hc1 : c₁ = 0
+  · by_cases hc2 : c₂ = 0 <;> simp [hc1, hc2]
+  by_cases hc2 : c₂ = 0
+  · simp [hc2]
+  by_cases hp1 : p₁ = 0
+  · simp [hp1]
+  by_cases hp2 : p₂ = 0
+  · simp [hp2]
+  have hm1 := (monomial_eq_zero (s:=d₁)).not.mpr hc1
+  have hm2 := (monomial_eq_zero (s:=d₂)).not.mpr hc2
+  simp_rw [m.degree_mul hm1 hp1, m.degree_mul hm2 hp2,
+    mul_sub, ← mul_assoc _ _ p₁, ← mul_assoc _ _ p₂, monomial_mul,
+    m.leadingCoeff_mul hm1 hp1, m.leadingCoeff_mul hm2 hp2, m.leadingCoeff_monomial,
+    degree_monomial]
+  simp [hc1, hc2]
+  congr 2
+  all_goals
+    congr 1
+    · congr 1
+      simp [Finsupp.ext_iff]
+      intro a
+      rw [Nat.sub_add_sub_cancel (by rw [Nat.max_le]; simp) (by simp)]
+      rw [← Nat.sub_add_comm (by simp)]
+      nth_rewrite 3 [add_comm _ <| (m.degree _) a]
+      rw [Nat.add_sub_add_right]
+    · ring
+
 end CommRing
 
 section Field
