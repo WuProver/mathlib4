@@ -57,6 +57,15 @@ it is customary to order them using the opposite order : `MvPolynomial.X 0 > MvP
 
 @[expose] public section
 
+universe u
+
+variable {α : Type u}
+
+@[to_additive IsOrderedAddMonoid.toIsOrderedCancelAddMonoid']
+instance (priority := 100) IsOrderedMonoid.toIsOrderedCancelMonoid'
+    [CancelCommMonoid α] [LinearOrder α] [IsOrderedMonoid α] : IsOrderedCancelMonoid α where
+  le_of_mul_le_mul_left _ _ _ h := le_of_mul_le_mul_left' h
+
 /-- Monomial orders : equivalence of `σ →₀ ℕ` with a well-ordered type -/
 structure MonomialOrder (σ : Type*) where
   /-- The synonym type -/
